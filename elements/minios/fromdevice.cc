@@ -85,7 +85,12 @@ FromDevice::initialize(ErrorHandler *errh)
 	if (!_dev)
 		return errh->error("Unable to initialize netfront for device %d (%s)", _vifid, nodename);
 
-	netfront_set_rx_handler(_dev, FromDevice::rx_handler, (void*)this);
+#ifdef CONFIG_NETMAP
+	if (_dev->netmap)
+		netfront_set_rx_handler(_dev, FromDevice::rx_handler, (void*)this);
+	else
+#endif
+	netfront_set_rx_pbuf_handler(_dev, FromDevice::pbuf_rx_handler, (void*)this);
 
 	ScheduleInfo::initialize_task(this, &_task, errh);
 
@@ -123,6 +128,20 @@ FromDevice::rx_handler(unsigned char* data, int len, void* e)
 {
 	Packet* p = Packet::make(data, len, FromDevice::pkt_destructor);
 	((FromDevice*) e)->_deque.push_back(p);
+}
+
+void
+FromDevice::pbuf_rx_handler(struct pbuf* pbuf_p, void* e)
+{
+	Packet* p = Packet::make((unsigned char*) pbuf_p->payload, pbuf_p->len, FromDevice::pbuf_pkt_destructor, pbuf_p);
+	((FromDevice*) e)->_deque.push_back(p);
+}
+
+void
+FromDevice::pbuf_pkt_destructor(unsigned char* data, long unsigned int lenght, void* arg)
+{
+	struct pbuf* pbuf_p = (struct pbuf*) arg;
+	pbuf_free(pbuf_p);
 }
 
 void
