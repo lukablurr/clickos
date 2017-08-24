@@ -86,7 +86,23 @@ FromDevice::initialize(ErrorHandler *errh)
 		return errh->error("Unable to initialize netfront for device %d (%s)", _vifid, nodename);
 
 #ifdef CONFIG_NETMAP
-	if (_dev->netmap)
+	char* msg = NULL;
+	char* backend = NULL;
+	char path[256];
+
+	/* Read the backend path */
+	snprintf(path, sizeof(path), "%s/backend", nodename);
+	msg = xenbus_read(XBT_NIL, path, &backend);
+	free(msg);
+
+	if (backend == NULL)
+		return errh->error("Invalid backend");
+
+	/* Check if it's using netmap */
+	snprintf(path, sizeof(path), "%s/feature-netmap", backend);
+	free(backend);
+
+	if (xenbus_read_integer(path) > 0)
 		netfront_set_rx_handler(_dev, FromDevice::rx_handler, (void*)this);
 	else
 #endif
